@@ -42,6 +42,8 @@ extern struct mtk_alg_template mtk_alg_authenc_hmac_sha256_ecb_null;
 extern struct mtk_alg_template mtk_alg_echainiv_authenc_hmac_sha1_cbc_aes;
 extern struct mtk_alg_template mtk_alg_echainiv_authenc_hmac_sha256_cbc_aes;
 
+#include <linux/version.h>
+
 struct sdesc {
 	struct shash_desc shash;
 	char ctx[];
@@ -50,7 +52,11 @@ struct sdesc {
 struct mtk_cipher_ctx {
 	struct mtk_device		*mtk;
 	struct saRecord_s		*sa;
+#if LINUX_VERSION_CODE <  KERNEL_VERSION(5,0,0)
+	struct crypto_skcipher	*fallback;
+#else
 	struct crypto_sync_skcipher	*fallback;
+#endif
 
 	/* AEAD specific */
 	unsigned int			authsize;
