@@ -791,7 +791,11 @@ static int mtk_skcipher_setkey(struct crypto_skcipher *ctfm, const u8 *key,
 	mtk_ctx_saRecord(ctx, key, nonce, keylen, flags);
 
 	if (ctx->fallback) {
+#if LINUX_VERSION_CODE <  KERNEL_VERSION(5,0,0)
+		ret = crypto_skcipher_setkey(ctx->fallback, key, len);
+#else
 		ret = crypto_sync_skcipher_setkey(ctx->fallback, key, len);
+#endif
 		if (ret)
 			return ret;
 	}
