@@ -8,7 +8,12 @@
 
 #include <crypto/authenc.h>
 #include <crypto/hmac.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+#include <crypto/des.h>
+#else
 #include <crypto/internal/des.h>
+#endif
 #include <crypto/md5.h>
 #include <crypto/sha.h>
 #include <linux/netdevice.h>
