@@ -12,7 +12,12 @@
 #include <crypto/ctr.h>
 #include <crypto/hmac.h>
 #include <crypto/internal/aead.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+#include <crypto/des.h>
+#else
 #include <crypto/internal/des.h>
+#endif
 #include <crypto/internal/skcipher.h>
 #include <crypto/md5.h>
 #include <crypto/scatterwalk.h>
@@ -686,9 +691,15 @@ static int mtk_skcipher_cra_init(struct crypto_tfm *tfm)
 	if (!ctx->sa)
 		printk("!! no sa memory\n");
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+	ctx->fallback = crypto_alloc_skcipher(crypto_tfm_alg_name(tfm), 0,
+					      CRYPTO_ALG_ASYNC |
+						      CRYPTO_ALG_NEED_FALLBACK);
+#else
 	ctx->fallback = crypto_alloc_sync_skcipher(
 		crypto_tfm_alg_name(tfm), 0,
 		CRYPTO_ALG_ASYNC | CRYPTO_ALG_NEED_FALLBACK);
+#endif
 
 	if (IS_ERR(ctx->fallback))
 		ctx->fallback = NULL;
@@ -703,7 +714,11 @@ static void mtk_skcipher_cra_exit(struct crypto_tfm *tfm)
 	kfree(ctx->sa);
 
 	if (ctx->fallback)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		crypto_free_skcipher(ctx->fallback);
+#else
 		crypto_free_sync_skcipher(ctx->fallback);
+#endif
 }
 
 static int mtk_skcipher_setkey(struct crypto_skcipher *ctfm, const u8 *key,
@@ -718,6 +733,9 @@ static int mtk_skcipher_setkey(struct crypto_skcipher *ctfm, const u8 *key,
 	unsigned int keylen = len;
 	u32 nonce = 0;
 	int ret = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+	u32 tmp[DES_EXPKEY_WORDS];
+#endif
 
 	if (!key || !keylen)
 		return -EINVAL;
@@ -730,17 +748,35 @@ static int mtk_skcipher_setkey(struct crypto_skcipher *ctfm, const u8 *key,
 
 	switch ((flags & MTK_ALG_MASK)) {
 	case MTK_ALG_AES:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		ret = crypto_aes_expand_key(&aes, key, keylen);
+#else
 		ret = aes_expandkey(&aes, key, keylen);
+#endif
 		break;
 	case MTK_ALG_DES:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		if (!des_ekey(tmp, key) &&
+		    (tfm->crt_flags & CRYPTO_TFM_REQ_WEAK_KEY)) {
+			ret = EINVAL;
+		}
+#else
 		ret = verify_skcipher_des_key(ctfm, key);
+#endif
 		break;
 	case MTK_ALG_3DES:
 		if (keylen != DES3_EDE_KEY_SIZE) {
 			ret = -EINVAL;
 			break;
 		}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		if (!des_ekey(tmp, key) &&
+		    (tfm->crt_flags & CRYPTO_TFM_REQ_WEAK_KEY)) {
+			ret = EINVAL;
+		}
+#else
 		ret = verify_skcipher_des3_key(ctfm, key);
+#endif
 	}
 
 	if (ret) {
@@ -751,7 +787,11 @@ static int mtk_skcipher_setkey(struct crypto_skcipher *ctfm, const u8 *key,
 	mtk_ctx_saRecord(ctx->sa, key, nonce, keylen, flags);
 
 	if (ctx->fallback) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		ret = crypto_skcipher_setkey(ctx->fallback, key, len);
+#else
 		ret = crypto_sync_skcipher_setkey(ctx->fallback, key, len);
+#endif
 		if (ret)
 			return ret;
 	}
@@ -782,8 +822,13 @@ static int mtk_skcipher_crypt(struct skcipher_request *req)
 	rctx->ivsize = ivsize;
 
 	if ((req->cryptlen < NUM_AES_BYPASS) && (ctx->fallback)) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+		SKCIPHER_REQUEST_ON_STACK(subreq, ctx->fallback);
+		skcipher_request_set_tfm(subreq, ctx->fallback);
+#else
 		SYNC_SKCIPHER_REQUEST_ON_STACK(subreq, ctx->fallback);
 		skcipher_request_set_sync_tfm(subreq, ctx->fallback);
+#endif
 		skcipher_request_set_callback(subreq, req->base.flags, NULL,
 					      NULL);
 		skcipher_request_set_crypt(subreq, req->src, req->dst,
