@@ -14,9 +14,9 @@
 #include <linux/netdevice.h>
 #include <net/xfrm.h>
 
+#include "eip93-cipher.h"
 #include "eip93-common.h"
 #include "eip93-core.h"
-#include "eip93-cipher.h"
 #include "eip93-ipsec.h"
 #include "eip93-regs.h"
 #include "eip93-ring.h"
@@ -25,8 +25,8 @@
  * declare adapter static for now
  */
 
-static struct ipsec_adapter	*adapter;
-static struct ipsec_sa_entry    *sa_list;
+static struct ipsec_adapter *adapter;
+static struct ipsec_sa_entry *sa_list;
 
 static int mtk_xfrm_add_state(struct xfrm_state *x);
 static void mtk_xfrm_del_state(struct xfrm_state *x);
@@ -35,10 +35,10 @@ static bool mtk_ipsec_offload_ok(struct sk_buff *skb, struct xfrm_state *x);
 static void mtk_advance_esn_state(struct xfrm_state *x);
 
 static const struct xfrmdev_ops mtk_xfrmdev_ops = {
-	.xdo_dev_state_add      = mtk_xfrm_add_state,
-	.xdo_dev_state_delete   = mtk_xfrm_del_state,
-	.xdo_dev_state_free     = mtk_xfrm_free_state,
-	.xdo_dev_offload_ok     = mtk_ipsec_offload_ok,
+	.xdo_dev_state_add = mtk_xfrm_add_state,
+	.xdo_dev_state_delete = mtk_xfrm_del_state,
+	.xdo_dev_state_free = mtk_xfrm_free_state,
+	.xdo_dev_offload_ok = mtk_ipsec_offload_ok,
 	.xdo_dev_state_advance_esn = mtk_advance_esn_state,
 };
 
@@ -67,21 +67,21 @@ bool mtk_add_xfrmops(struct net_device *netdev)
 		}
 	};
 
-	if (i ==  IPSEC_MAX_ADAPTER_COUNT) {
+	if (i == IPSEC_MAX_ADAPTER_COUNT) {
 		netdev_info(netdev, "Adapter list is full, cannot offload\n");
 		return false;
 	}
 	adapter[i].netdev = netdev;
 
 	netdev->xfrmdev_ops = &mtk_xfrmdev_ops;
- 	netdev->hw_enc_features |= NETIF_F_HW_ESP;
- 	netdev->features |= NETIF_F_HW_ESP;
- 	rtnl_lock();
- 	netdev_change_features(netdev);
- 	rtnl_unlock();
+	netdev->hw_enc_features |= NETIF_F_HW_ESP;
+	netdev->features |= NETIF_F_HW_ESP;
+	rtnl_lock();
+	netdev_change_features(netdev);
+	rtnl_unlock();
 	netdev_info(netdev, "ESP Hardware offload features added\n");
 	return true;
- }
+}
 
 /*
  * mtk_validate_state
@@ -90,16 +90,16 @@ bool mtk_add_xfrmops(struct net_device *netdev)
  */
 unsigned long int mtk_validate_state(struct xfrm_state *x)
 {
- 	struct net_device *netdev = x->xso.dev;
- 	unsigned long int flags = 0;
+	struct net_device *netdev = x->xso.dev;
+	unsigned long int flags = 0;
 
 	if (x->id.proto != IPPROTO_ESP) {
- 		netdev_info(netdev, "Only ESP xfrm state may be offloaded\n");
- 		return 0;
- 	}
+		netdev_info(netdev, "Only ESP xfrm state may be offloaded\n");
+		return 0;
+	}
 	/* TODO: add ipv6 support */
 	if (x->props.family != AF_INET) {
-//		&& x->props.family != AF_INET6) {
+		//		&& x->props.family != AF_INET6) {
 		netdev_info(netdev, "Only IPv4 xfrm states may be offloaded\n");
 		return 0;
 	}
@@ -107,78 +107,85 @@ unsigned long int mtk_validate_state(struct xfrm_state *x)
 		netdev_info(netdev, "Cannot offload xfrm states with aead\n");
 		return 0;
 	}
- 	if (x->props.aalgo == SADB_AALG_NONE) {
- 		netdev_info(netdev, "Can only offload without encryption xfrm states\n");
- 		return 0;
- 	}
- 	if (x->props.calgo != SADB_X_CALG_NONE) {
- 		netdev_info(netdev, "Cannot offload compressed xfrm states\n");
- 		return 0;
- 	}
- 	/* TODO: support ESN */
- 	if (x->props.flags & XFRM_STATE_ESN) {
- 		netdev_info(netdev, "Cannot offload ESN xfrm states\n");
- 		return 0;
- 	}
- 	/* TODO: add transport mode */
- 	if (x->props.mode != XFRM_MODE_TUNNEL) {
- //		&& x->props.mode != XFRM_MODE_TRANSPORT) {
- 		dev_info(&netdev->dev, "Only tunnel xfrm states may be offloaded\n");
- 		return 0;
- 	}
- 	if (x->encap) {
- 		netdev_info(netdev, "Encapsulated xfrm state may not be offloaded\n");
- 		return 0;
- 	}
- 	if (x->tfcpad) {
- 		netdev_info(netdev, "Cannot offload xfrm states with tfc padding\n");
- 		return 0;
- 	}
-
-	netdev_info(netdev, "Got: %s with %s\n",
-				x->ealg->alg_name, x->aalg->alg_name);
-
-     	switch (x->props.ealgo) {
- 	case SADB_EALG_DESCBC:
- 		flags |= MTK_ALG_DES | MTK_MODE_CBC;
- 		break;
- 	case SADB_EALG_3DESCBC:
- 		flags |= MTK_ALG_3DES | MTK_MODE_CBC;
- 		break;
- 	case SADB_X_EALG_AESCBC:
- 		flags |= MTK_ALG_AES | MTK_MODE_CBC;
- 		break;
- 	case SADB_X_EALG_AESCTR:
- 		flags |= MTK_ALG_AES | MTK_MODE_CTR;
- 	case SADB_EALG_NULL:
- 		break;
- 	default:
- 		netdev_info(netdev, "Cannot offload encryption: %s\n", x->ealg->alg_name);
- 		return 0;
- 	}
-
- 	switch (x->props.aalgo) {
- 	case SADB_AALG_SHA1HMAC:
- 		flags |= MTK_HASH_SHA1;
- 		break;
- 	case SADB_X_AALG_SHA2_256HMAC:
- 		flags |= MTK_HASH_SHA256;
- 		break;
- 	case SADB_AALG_MD5HMAC:
- 		flags |= MTK_HASH_MD5;
- 		break;
- 	default:
- 		netdev_info(netdev, "Cannot offload authentication: %s\n", x->aalg->alg_name);
- 		return 0;
+	if (x->props.aalgo == SADB_AALG_NONE) {
+		netdev_info(
+			netdev,
+			"Can only offload without encryption xfrm states\n");
+		return 0;
 	}
- /*
+	if (x->props.calgo != SADB_X_CALG_NONE) {
+		netdev_info(netdev, "Cannot offload compressed xfrm states\n");
+		return 0;
+	}
+	/* TODO: support ESN */
+	if (x->props.flags & XFRM_STATE_ESN) {
+		netdev_info(netdev, "Cannot offload ESN xfrm states\n");
+		return 0;
+	}
+	/* TODO: add transport mode */
+	if (x->props.mode != XFRM_MODE_TUNNEL) {
+		//		&& x->props.mode != XFRM_MODE_TRANSPORT) {
+		dev_info(&netdev->dev,
+			 "Only tunnel xfrm states may be offloaded\n");
+		return 0;
+	}
+	if (x->encap) {
+		netdev_info(netdev,
+			    "Encapsulated xfrm state may not be offloaded\n");
+		return 0;
+	}
+	if (x->tfcpad) {
+		netdev_info(netdev,
+			    "Cannot offload xfrm states with tfc padding\n");
+		return 0;
+	}
+
+	netdev_info(netdev, "Got: %s with %s\n", x->ealg->alg_name,
+		    x->aalg->alg_name);
+
+	switch (x->props.ealgo) {
+	case SADB_EALG_DESCBC:
+		flags |= MTK_ALG_DES | MTK_MODE_CBC;
+		break;
+	case SADB_EALG_3DESCBC:
+		flags |= MTK_ALG_3DES | MTK_MODE_CBC;
+		break;
+	case SADB_X_EALG_AESCBC:
+		flags |= MTK_ALG_AES | MTK_MODE_CBC;
+		break;
+	case SADB_X_EALG_AESCTR:
+		flags |= MTK_ALG_AES | MTK_MODE_CTR;
+	case SADB_EALG_NULL:
+		break;
+	default:
+		netdev_info(netdev, "Cannot offload encryption: %s\n",
+			    x->ealg->alg_name);
+		return 0;
+	}
+
+	switch (x->props.aalgo) {
+	case SADB_AALG_SHA1HMAC:
+		flags |= MTK_HASH_SHA1;
+		break;
+	case SADB_X_AALG_SHA2_256HMAC:
+		flags |= MTK_HASH_SHA256;
+		break;
+	case SADB_AALG_MD5HMAC:
+		flags |= MTK_HASH_MD5;
+		break;
+	default:
+		netdev_info(netdev, "Cannot offload authentication: %s\n",
+			    x->aalg->alg_name);
+		return 0;
+	}
+	/*
  	if (x->aead->alg_icv_len != 128) {
  		netdev_info(netdev, "Cannot offload xfrm states with AEAD ICV length other than 128bit\n");
  		return -EINVAL;
  	}
  */
 
- /*
+	/*
  	TODO check key_len
  	// split for RFC3686 with nonce vs others !!
  	if ((x->aead->alg_key_len != 128 + 32) &&
@@ -191,16 +198,16 @@ unsigned long int mtk_validate_state(struct xfrm_state *x)
 }
 
 static int mtk_create_sa(struct mtk_device *mtk, struct ipsec_sa_entry *ipsec,
-			struct xfrm_state *x, unsigned long int flags)
+			 struct xfrm_state *x, unsigned long int flags)
 {
 	struct saRecord_s *saRecord;
 	struct crypto_shash *hash;
 	char *alg_base;
 	const u8 *enckey = x->ealg->alg_key;
-	unsigned int enckeylen = (x->ealg->alg_key_len >>3);
+	unsigned int enckeylen = (x->ealg->alg_key_len >> 3);
 	const u8 *authkey = x->aalg->alg_key;
-	unsigned int authkeylen = (x->aalg->alg_key_len >>3);
-	unsigned int trunc_len = (x->aalg->alg_trunc_len >>3);
+	unsigned int authkeylen = (x->aalg->alg_key_len >> 3);
+	unsigned int trunc_len = (x->aalg->alg_trunc_len >> 3);
 	u32 nonce = 0;
 	unsigned int size;
 	int err;
@@ -214,9 +221,9 @@ static int mtk_create_sa(struct mtk_device *mtk, struct ipsec_sa_entry *ipsec,
 
 	hash = crypto_alloc_shash(alg_base, 0, CRYPTO_ALG_NEED_FALLBACK);
 	if (IS_ERR(hash)) {
-	 	dev_err(mtk->dev, "base driver %s could not be loaded.\n",
-			 alg_base);
-	return PTR_ERR(hash);
+		dev_err(mtk->dev, "base driver %s could not be loaded.\n",
+			alg_base);
+		return PTR_ERR(hash);
 	}
 
 	size = sizeof(struct shash_desc) + crypto_shash_descsize(hash);
@@ -228,7 +235,7 @@ static int mtk_create_sa(struct mtk_device *mtk, struct ipsec_sa_entry *ipsec,
 	ipsec->sdesc->shash.tfm = hash;
 
 	ipsec->sa = dma_pool_zalloc(mtk->saRecord_pool, GFP_KERNEL,
-					 &ipsec->sa_base);
+				    &ipsec->sa_base);
 	if (!ipsec->sa)
 		dev_err(mtk->dev, "No saRecord DMA memory\n");
 
@@ -237,14 +244,15 @@ static int mtk_create_sa(struct mtk_device *mtk, struct ipsec_sa_entry *ipsec,
 	/* Encryption key */
 	mtk_ctx_saRecord(ipsec->sa, enckey, nonce, enckeylen, flags);
 	/* authentication key */
-	err = mtk_authenc_setkey(ipsec->sa,  ipsec->sdesc, authkey, authkeylen);
+	err = mtk_authenc_setkey(ipsec->sa, ipsec->sdesc, authkey, authkeylen);
 	if (err)
 		dev_err(mtk->dev, "Set Key failed: %d\n", err);
 
 	/* TODO check inbound or outbound */
 	saRecord->saCmd0.bits.direction = 1;
 	saRecord->saCmd1.bits.byteOffset = 0;
-	saRecord->saCmd1.bits.hashCryptOffset = 0; //(8 >> 2)(rctx->assoclen >> 2);
+	saRecord->saCmd1.bits.hashCryptOffset =
+		0; //(8 >> 2)(rctx->assoclen >> 2);
 	saRecord->saCmd0.bits.digestLength = (trunc_len >> 2);
 	saRecord->saCmd1.bits.hmac = 1;
 	saRecord->saCmd0.bits.padType = 0;
@@ -269,7 +277,8 @@ static int mtk_create_sa(struct mtk_device *mtk, struct ipsec_sa_entry *ipsec,
 	ipsec->cdesc.saAddr = ipsec->sa_base;
 	ipsec->cdesc.stateAddr = 0;
 	ipsec->cdesc.arc4Addr = 0; // skb pointer
-	ipsec->cdesc.userId = flags | MTK_DESC_IPSEC | MTK_DESC_LAST | MTK_DESC_FINISH;
+	ipsec->cdesc.userId =
+		flags | MTK_DESC_IPSEC | MTK_DESC_LAST | MTK_DESC_FINISH;
 	ipsec->xs = x;
 	ipsec->daddr = x->id.daddr;
 	ipsec->spi = x->id.spi;
@@ -277,7 +286,7 @@ static int mtk_create_sa(struct mtk_device *mtk, struct ipsec_sa_entry *ipsec,
 	return 0;
 }
 
- /*
+/*
  * mtk_xfrm_add_state
  */
 static int mtk_xfrm_add_state(struct xfrm_state *x)
@@ -299,7 +308,7 @@ static int mtk_xfrm_add_state(struct xfrm_state *x)
 
 	for (i = 0; i < IPSEC_MAX_SA_COUNT; i++) {
 		if (sa_list[i].xs == NULL)
-				break;
+			break;
 	};
 
 	if (i == IPSEC_MAX_SA_COUNT) {
@@ -328,8 +337,8 @@ static int mtk_xfrm_add_state(struct xfrm_state *x)
 
 	x->xso.offload_handle = (unsigned long)ipsec;
 	try_module_get(THIS_MODULE);
-	dev_info(mtk->dev, "inbound spi: %08x saddr: %08x\n",
-					ipsec->spi, ipsec->daddr.a4);
+	dev_info(mtk->dev, "inbound spi: %08x saddr: %08x\n", ipsec->spi,
+		 ipsec->daddr.a4);
 	netdev_info(netdev, "State added\n");
 
 	return 0;
@@ -401,11 +410,11 @@ static bool mtk_ipsec_offload_ok(struct sk_buff *skb, struct xfrm_state *xs)
 	}
 
 	return false;
-//	return true;
+	//	return true;
 }
 
 void mtk_ipsec_handle_result(struct mtk_device *mtk, struct sk_buff *skb,
-			dma_addr_t srcAddr, u8 nexthdr, int len, int err)
+			     dma_addr_t srcAddr, u8 nexthdr, int len, int err)
 {
 	struct ipsec_sa_entry *ipsec;
 	struct net_device *netdev = skb->dev;
@@ -438,21 +447,22 @@ void mtk_ipsec_handle_result(struct mtk_device *mtk, struct sk_buff *skb,
 
 	for (i = 0; i < IPSEC_MAX_SA_COUNT; i++) {
 		if (sa_list[i].spi == spi && sa_list[i].daddr.a4 == daddr)
-				break;
+			break;
 	};
 	if (i == IPSEC_MAX_SA_COUNT) {
 		dev_info(mtk->dev, "unable to find xfrm?\n");
 		return;
 	}
 	printk("ipsec xfrm found\n");
-	if (err ==  1) {
+	if (err == 1) {
 		printk("-EBADMSG\n");
 	}
 	ipsec = &sa_list[i];
 }
 
 static int mtk_ipsec_offload(struct mtk_device *mtk,
-			struct eip93_descriptor_s desc, struct sk_buff *skb)
+			     struct eip93_descriptor_s desc,
+			     struct sk_buff *skb)
 {
 	struct eip93_descriptor_s *cdesc, *rdesc;
 	dma_addr_t saddr;
@@ -460,7 +470,7 @@ static int mtk_ipsec_offload(struct mtk_device *mtk,
 	print_hex_dump_bytes("", DUMP_PREFIX_NONE, skb->data, skb->len);
 
 	saddr = dma_map_single(mtk->dev, (void *)skb->data, skb->len,
-						DMA_BIDIRECTIONAL);
+			       DMA_BIDIRECTIONAL);
 
 	spin_lock(&mtk->ring[0].write_lock);
 	rdesc = mtk_add_rdesc(mtk);
@@ -504,7 +514,7 @@ static int mtk_input(struct sk_buff *skb, int nexthdr, __be32 spi,
 {
 	printk("mtk_input\n");
 
-/*
+	/*
 	struct ip_tunnel *tunnel;
 	const struct iphdr *iph = ip_hdr(skb);
 	struct net *net = dev_net(skb->dev);
@@ -543,25 +553,25 @@ static int mtk_rcv(struct sk_buff *skb, __be32 spi, bool update_skb_dev)
 
 	printk("mtk-rcv\n");
 
-//	XFRM_SPI_SKB_CB(skb)->family = AF_INET;
-//	XFRM_SPI_SKB_CB(skb)->daddroff = offsetof(struct iphdr, daddr);
+	//	XFRM_SPI_SKB_CB(skb)->family = AF_INET;
+	//	XFRM_SPI_SKB_CB(skb)->daddroff = offsetof(struct iphdr, daddr);
 
 	switch (protocol) {
 	case IPPROTO_ESP:
-		esph = (struct ip_esp_hdr *)(skb->data+(iph->ihl<<2));
+		esph = (struct ip_esp_hdr *)(skb->data + (iph->ihl << 2));
 		//spi = esph->spi;
 		printk("inbound spi:%08x\n", esph->spi);
 		break;
 	case IPPROTO_AH:
-//		ah = (struct ip_auth_hdr *)(skb->data+(iph->ihl<<2));
-//		spi = ah->spi;
+		//		ah = (struct ip_auth_hdr *)(skb->data+(iph->ihl<<2));
+		//		spi = ah->spi;
 		break;
 	case IPPROTO_COMP:
-//		ipch = (struct ip_comp_hdr *)(skb->data+(iph->ihl<<2));
-//		spi = htonl(ntohs(ipch->cpi));
+		//		ipch = (struct ip_comp_hdr *)(skb->data+(iph->ihl<<2));
+		//		spi = htonl(ntohs(ipch->cpi));
 		break;
-//	default:
-//		return 0;
+		//	default:
+		//		return 0;
 	}
 
 	return mtk_input(skb, ip_hdr(skb)->protocol, spi, 0, update_skb_dev);
@@ -590,7 +600,8 @@ static int mtk_rcv_proto(struct sk_buff *skb)
 		printk("No netdev ??\n");
 
 	for (i = 0; i < IPSEC_MAX_SA_COUNT; i++) {
-		if ((sa_list[i].spi == spi)) // && (sa_list[i].daddr.a4 == daddr))
+		if ((sa_list[i].spi ==
+		     spi)) // && (sa_list[i].daddr.a4 == daddr))
 			break;
 	};
 	if (i == IPSEC_MAX_SA_COUNT) {
@@ -618,7 +629,7 @@ static int mtk_rcv_cb(struct sk_buff *skb, int err)
 	printk("mtk-rcv-cb\n");
 
 	return 1;
-/*
+	/*
 	unsigned short family;
 	struct net_device *dev;
 	struct pcpu_sw_netstats *tstats;
@@ -677,7 +688,7 @@ static int mtk_rcv_cb(struct sk_buff *skb, int err)
 static int mtk_err(struct sk_buff *skb, u32 info)
 {
 	printk("mtk_err\n");
-/*
+	/*
 	__be32 spi;
 	__u32 mark;
 	struct xfrm_state *x;
@@ -739,11 +750,11 @@ static int mtk_err(struct sk_buff *skb, u32 info)
 }
 
 static struct xfrm4_protocol mtk_esp4_protocol __read_mostly = {
-	.handler	=	mtk_rcv_proto,
-	.input_handler	=	mtk_input_proto,
-	.cb_handler	=	mtk_rcv_cb,
-	.err_handler	=	mtk_err,
-	.priority	=	300,
+	.handler = mtk_rcv_proto,
+	.input_handler = mtk_input_proto,
+	.cb_handler = mtk_rcv_cb,
+	.err_handler = mtk_err,
+	.priority = 300,
 };
 /* Register xfrm protocol */
 int mtk_protocol_register(struct mtk_device *mtk)
@@ -771,14 +782,14 @@ int mtk_protocol_register(struct mtk_device *mtk)
 	if (err < 0)
 		dev_err(mtk->dev, "xfrm4 protocol register failed\n");
 
-	dev_info(mtk->dev,"xfrm4 protocols registed\n");
+	dev_info(mtk->dev, "xfrm4 protocols registed\n");
 	return err;
 }
 
 void mtk_protocol_deregister(struct mtk_device *mtk)
 {
 	xfrm4_protocol_deregister(&mtk_esp4_protocol, IPPROTO_ESP);
-	dev_info(mtk->dev,"xfrm4 protocols deregisted\n");
+	dev_info(mtk->dev, "xfrm4 protocols deregisted\n");
 
 	/* TODO: unregister extra XFRM OFFLOAD */
 	kfree(sa_list);

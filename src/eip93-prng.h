@@ -22,13 +22,13 @@ bool mtk_prng_init(struct mtk_device *mtk, bool fLongSA);
 void mtk_prng_done(struct mtk_device *mtk, u32 err);
 
 struct mtk_prng_ctx {
-	spinlock_t		prng_lock;
-	unsigned char		rand_data[DEFAULT_BLK_SZ];
-	unsigned char		last_rand_data[DEFAULT_BLK_SZ];
-	uint32_t		PRNGKey[4];
-	uint32_t		PRNGSeed[4];
-	uint32_t		PRNGDateTime[4];
-	struct crypto_cipher	*tfm;
-	uint32_t		rand_data_valid;
-	uint32_t		flags;
+	spinlock_t prng_lock;
+	unsigned char rand_data[DEFAULT_BLK_SZ];
+	unsigned char last_rand_data[DEFAULT_BLK_SZ];
+	uint32_t PRNGKey[4];
+	uint32_t PRNGSeed[4];
+	uint32_t PRNGDateTime[4];
+	struct crypto_cipher *tfm;
+	uint32_t rand_data_valid;
+	uint32_t flags;
 };

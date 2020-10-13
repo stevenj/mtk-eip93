@@ -48,49 +48,49 @@ struct sdesc {
 };
 
 struct mtk_cipher_ctx {
-	struct mtk_device		*mtk;
-	struct saRecord_s		*sa;
-	struct crypto_sync_skcipher	*fallback;
+	struct mtk_device *mtk;
+	struct saRecord_s *sa;
+	struct crypto_sync_skcipher *fallback;
 
 	/* AEAD specific */
-	unsigned int			authsize;
-	struct sdesc			*sdesc;
+	unsigned int authsize;
+	struct sdesc *sdesc;
 };
 
 struct mtk_cipher_reqctx {
-	unsigned long int		flags;
-	u32				textsize;
-	u32				ivsize;
-	struct saRecord_s		*saRecord;
-	dma_addr_t			saRecord_base;
-	struct saState_s		*saState;
-	dma_addr_t			saState_base;
-	struct eip93_descriptor_s	cdesc;
+	unsigned long int flags;
+	u32 textsize;
+	u32 ivsize;
+	struct saRecord_s *saRecord;
+	dma_addr_t saRecord_base;
+	struct saState_s *saState;
+	dma_addr_t saState_base;
+	struct eip93_descriptor_s cdesc;
 	/* copy in case of mis-alignment or AEAD if no-consecutive blocks */
-	struct scatterlist		*sg_src;
-	struct scatterlist		*sg_dst;
+	struct scatterlist *sg_src;
+	struct scatterlist *sg_dst;
 	/* AEAD */
-	u32				assoclen;
-	u32				authsize;
+	u32 assoclen;
+	u32 authsize;
 	/* AES-CTR in case of counter overflow */
-	struct saState_s		*saState_ctr;
-	dma_addr_t			saState_base_ctr;
-	struct scatterlist		ctr_src[2];
-	struct scatterlist		ctr_dst[2];
+	struct saState_s *saState_ctr;
+	dma_addr_t saState_base_ctr;
+	struct scatterlist ctr_src[2];
+	struct scatterlist ctr_dst[2];
 };
 
 void mtk_skcipher_handle_result(struct mtk_device *mtk,
 				struct crypto_async_request *async,
-				bool complete,  int err);
+				bool complete, int err);
 
 void mtk_aead_handle_result(struct mtk_device *mtk,
-				struct crypto_async_request *async,
-				bool complete,  int err);
+			    struct crypto_async_request *async, bool complete,
+			    int err);
 
 void mtk_ctx_saRecord(struct saRecord_s *saRecord, const u8 *key, u32 nonce,
-			unsigned int keylen, unsigned long int flags);
+		      unsigned int keylen, unsigned long int flags);
 
-int mtk_authenc_setkey(struct saRecord_s *sa,  struct sdesc *sdesc,
-				const u8 *authkey, unsigned int authkeylen);
+int mtk_authenc_setkey(struct saRecord_s *sa, struct sdesc *sdesc,
+		       const u8 *authkey, unsigned int authkeylen);
 
 #endif /* _CIPHER_H_ */
