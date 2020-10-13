@@ -9,12 +9,12 @@
 #include "eip93-core.h"
 
 inline void *mtk_ring_next_wptr(struct mtk_device *mtk,
-						struct mtk_desc_ring *ring)
+				struct mtk_desc_ring *ring)
 {
 	void *ptr = ring->write;
 
 	if ((ring->write == ring->read - ring->offset) ||
-		(ring->read == ring->base && ring->write == ring->base_end))
+	    (ring->read == ring->base && ring->write == ring->base_end))
 		return ERR_PTR(-ENOMEM);
 
 	if (ring->write == ring->base_end)
@@ -26,7 +26,7 @@ inline void *mtk_ring_next_wptr(struct mtk_device *mtk,
 }
 
 inline void *mtk_ring_next_rptr(struct mtk_device *mtk,
-						struct mtk_desc_ring *ring)
+				struct mtk_desc_ring *ring)
 {
 	void *ptr = ring->read;
 
@@ -42,7 +42,7 @@ inline void *mtk_ring_next_rptr(struct mtk_device *mtk,
 }
 
 inline void mtk_ring_rollback_wptr(struct mtk_device *mtk,
-				 	struct mtk_desc_ring *ring)
+				   struct mtk_desc_ring *ring)
 {
 	if (ring->write == ring->read)
 		return;

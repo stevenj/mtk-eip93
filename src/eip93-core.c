@@ -16,15 +16,15 @@
 #include <linux/types.h>
 
 #include <crypto/internal/aead.h>
-#include <crypto/internal/skcipher.h>
 #include <crypto/internal/hash.h>
+#include <crypto/internal/skcipher.h>
 
-#include "eip93-regs.h"
+#include "eip93-cipher.h"
 #include "eip93-common.h"
 #include "eip93-core.h"
-#include "eip93-ring.h"
-#include "eip93-cipher.h"
 #include "eip93-prng.h"
+#include "eip93-regs.h"
+#include "eip93-ring.h"
 
 static struct mtk_alg_template *mtk_algs[] = {
 	&mtk_alg_ecb_des,
@@ -55,9 +55,9 @@ static struct mtk_alg_template *mtk_algs[] = {
 	&mtk_alg_authenc_hmac_sha1_ecb_null,
 	&mtk_alg_authenc_hmac_sha224_ecb_null,
 	&mtk_alg_authenc_hmac_sha256_ecb_null,
-//	&mtk_alg_echainiv_authenc_hmac_sha256_cbc_aes,
-//	&mtk_alg_prng,
-//	&mtk_alg_cprng,
+	//	&mtk_alg_echainiv_authenc_hmac_sha256_cbc_aes,
+	//	&mtk_alg_prng,
+	//	&mtk_alg_cprng,
 };
 
 static void mtk_unregister_algs(struct mtk_device *mtk, int i)
@@ -100,7 +100,8 @@ static int mtk_register_algs(struct mtk_device *mtk)
 		case MTK_ALG_TYPE_SKCIPHER:
 			dev_dbg(mtk->dev, "registering: %s",
 				mtk_algs[i]->alg.skcipher.base.cra_name);
-			ret = crypto_register_skcipher(&mtk_algs[i]->alg.skcipher);
+			ret = crypto_register_skcipher(
+				&mtk_algs[i]->alg.skcipher);
 			break;
 		case MTK_ALG_TYPE_AEAD:
 			dev_dbg(mtk->dev, "registering: %s",
@@ -158,9 +159,9 @@ inline void mtk_push_request(struct mtk_device *mtk, int DescriptorPendingCount)
 		return;
 
 	writel(BIT(31) | (DescriptorCountDone & GENMASK(10, 0)) |
-		(((DescriptorPendingCount - 1) & GENMASK(10, 0)) << 16) |
-		((DescriptorDoneTimeout  & GENMASK(4, 0)) << 26),
-		mtk->base + EIP93_REG_PE_RING_THRESH);
+		       (((DescriptorPendingCount - 1) & GENMASK(10, 0)) << 16) |
+		       ((DescriptorDoneTimeout & GENMASK(4, 0)) << 26),
+	       mtk->base + EIP93_REG_PE_RING_THRESH);
 }
 
 static void mtk_handle_result_descriptor(struct mtk_device *mtk)
@@ -170,16 +171,20 @@ static void mtk_handle_result_descriptor(struct mtk_device *mtk)
 	struct eip93_descriptor_s *cdesc;
 	struct eip93_descriptor_s *rdesc;
 	int handled = 0, nreq;
-	int try, ret, err = 0;
+	int
+	try
+		, ret, err = 0;
 	volatile int done1, done2;
 	bool last_entry = false;
 	bool complete = false;
 	u32 flags;
 
 get_more:
-	try = 1;
-	while (try--) {
-		nreq = readl(mtk->base + EIP93_REG_PE_RD_COUNT) & GENMASK(10, 0);
+	try
+		= 1;
+	while (try --) {
+		nreq = readl(mtk->base + EIP93_REG_PE_RD_COUNT) &
+		       GENMASK(10, 0);
 		if (nreq)
 			break;
 	}
@@ -190,7 +195,8 @@ get_more:
 	while (nreq) {
 		rdesc = mtk_ring_next_rptr(mtk, &mtk->ring->rdr);
 		if (IS_ERR(rdesc)) {
-			dev_err(mtk->dev, "Ndesc: %d nreq: %d\n", handled, nreq);
+			dev_err(mtk->dev, "Ndesc: %d nreq: %d\n", handled,
+				nreq);
 			ret = -EIO;
 			break;
 		}
@@ -203,14 +209,16 @@ get_more:
 		/* make sure EIP93 finished writing all data
 		 * (volatile int) used since bits will be updated via DMA
 		*/
-		try = 0;
+		try
+			= 0;
 		while (try < 1000) {
 			done1 = (volatile int)rdesc->peCrtlStat.bits.peReady;
 			done2 = (volatile int)rdesc->peLength.bits.peReady;
 			if ((!done1) || (!done2)) {
-					try++;
-					cpu_relax();
-					continue;
+				try
+					++;
+				cpu_relax();
+				continue;
 			}
 			break;
 		}
@@ -288,7 +296,7 @@ static irqreturn_t mtk_irq_handler(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-/* TODO: error handler; for now just clear ALL */
+	/* TODO: error handler; for now just clear ALL */
 	dev_err(mtk->dev, "IRQ: %08x\n", irq_status);
 	mtk_irq_clear(mtk, irq_status);
 	if (irq_status) {
@@ -311,7 +319,7 @@ void mtk_initialize(struct mtk_device *mtk)
 	uint8_t fResetRing = 1;
 	uint8_t PE_Mode = 3;
 	uint8_t fBO_PD_en = 0;
-	uint8_t fBO_SA_en = 0 ;
+	uint8_t fBO_SA_en = 0;
 	uint8_t fBO_Data_en = 0;
 	uint8_t fBO_TD_en = 0;
 	uint8_t fEnablePDRUpdate = 1;
@@ -322,41 +330,35 @@ void mtk_initialize(struct mtk_device *mtk)
 	int DescriptorDoneTimeout = 3;
 	u32 regVal;
 
-	writel((fRstPacketEngine & 1) |
-		((fResetRing & 1) << 1) |
-		((PE_Mode & GENMASK(2, 0)) << 8) |
-		((fBO_PD_en & 1) << 16) |
-		((fBO_SA_en & 1) << 17) |
-		((fBO_Data_en  & 1) << 18) |
-		((fBO_TD_en & 1) << 20) |
-		((fEnablePDRUpdate & 1) << 10),
-		mtk->base + EIP93_REG_PE_CONFIG);
+	writel((fRstPacketEngine & 1) | ((fResetRing & 1) << 1) |
+		       ((PE_Mode & GENMASK(2, 0)) << 8) |
+		       ((fBO_PD_en & 1) << 16) | ((fBO_SA_en & 1) << 17) |
+		       ((fBO_Data_en & 1) << 18) | ((fBO_TD_en & 1) << 20) |
+		       ((fEnablePDRUpdate & 1) << 10),
+	       mtk->base + EIP93_REG_PE_CONFIG);
 
 	udelay(10);
 
 	fRstPacketEngine = 0;
 	fResetRing = 0;
 
-	writel((fRstPacketEngine & 1) |
-		((fResetRing & 1) << 1) |
-		((PE_Mode & GENMASK(2, 0)) << 8) |
-		((fBO_PD_en & 1) << 16) |
-		((fBO_SA_en & 1) << 17) |
-		((fBO_Data_en  & 1) << 18) |
-		((fBO_TD_en & 1) << 20) |
-		((fEnablePDRUpdate & 1) << 10),
-		mtk->base + EIP93_REG_PE_CONFIG);
+	writel((fRstPacketEngine & 1) | ((fResetRing & 1) << 1) |
+		       ((PE_Mode & GENMASK(2, 0)) << 8) |
+		       ((fBO_PD_en & 1) << 16) | ((fBO_SA_en & 1) << 17) |
+		       ((fBO_Data_en & 1) << 18) | ((fBO_TD_en & 1) << 20) |
+		       ((fEnablePDRUpdate & 1) << 10),
+	       mtk->base + EIP93_REG_PE_CONFIG);
 
 	/* Initialize the BYTE_ORDER_CFG register */
 	writel((EIP93_BYTE_ORDER_PD & GENMASK(4, 0)) |
-		((EIP93_BYTE_ORDER_SA & GENMASK(4, 0)) << 4) |
-		((EIP93_BYTE_ORDER_DATA & GENMASK(4, 0)) << 8) |
-		((EIP93_BYTE_ORDER_TD & GENMASK(2, 0)) << 16),
-		mtk->base + EIP93_REG_PE_ENDIAN_CONFIG);
+		       ((EIP93_BYTE_ORDER_SA & GENMASK(4, 0)) << 4) |
+		       ((EIP93_BYTE_ORDER_DATA & GENMASK(4, 0)) << 8) |
+		       ((EIP93_BYTE_ORDER_TD & GENMASK(2, 0)) << 16),
+	       mtk->base + EIP93_REG_PE_ENDIAN_CONFIG);
 	/* Initialize the INT_CFG register */
 	writel((EIP93_INT_HOST_OUTPUT_TYPE & 1) |
-		((EIP93_INT_PULSE_CLEAR << 1) & 1),
-		mtk->base + EIP93_REG_INT_CFG);
+		       ((EIP93_INT_PULSE_CLEAR << 1) & 1),
+	       mtk->base + EIP93_REG_INT_CFG);
 	/* Clock Control, must for DHM, optional for ARM
 	 * 0x1 Only enable Packet Engine Clock
 	 *     AES, DES and HASH clocks on demand
@@ -366,17 +368,17 @@ void mtk_initialize(struct mtk_device *mtk)
 	writel(regVal, mtk->base + EIP93_REG_PE_CLOCK_CTRL);
 
 	writel(BIT(31) | (InputThreshold & GENMASK(10, 0)) |
-		((OutputThreshold & GENMASK(10, 0)) << 16),
-		mtk->base + EIP93_REG_PE_BUF_THRESH);
+		       ((OutputThreshold & GENMASK(10, 0)) << 16),
+	       mtk->base + EIP93_REG_PE_BUF_THRESH);
 
 	/* Clear/ack all interrupts before disable all */
 	mtk_irq_clear(mtk, 0xFFFFFFFF);
 	mtk_irq_disable(mtk, 0xFFFFFFFF);
 
 	writel((DescriptorCountDone & GENMASK(10, 0)) |
-		(((DescriptorPendingCount - 1) & GENMASK(10, 0)) << 16) |
-		((DescriptorDoneTimeout  & GENMASK(4, 0)) << 26),
-		mtk->base + EIP93_REG_PE_RING_THRESH);
+		       (((DescriptorPendingCount - 1) & GENMASK(10, 0)) << 16) |
+		       ((DescriptorDoneTimeout & GENMASK(4, 0)) << 26),
+	       mtk->base + EIP93_REG_PE_RING_THRESH);
 
 	regVal = readl(mtk->base + EIP93_REG_PE_REVISION);
 	dev_dbg(mtk->dev, "Rev: %08x", regVal);
@@ -384,21 +386,18 @@ void mtk_initialize(struct mtk_device *mtk)
 	dev_dbg(mtk->dev, "Opt1: %08x", regVal);
 	regVal = readl(mtk->base + EIP93_REG_PE_OPTION_0);
 	dev_dbg(mtk->dev, "Opt0: %08x", regVal);
-
 }
 
-static void mtk_desc_free(struct mtk_device *mtk,
-				struct mtk_desc_ring *cdr,
-				struct mtk_desc_ring *rdr)
+static void mtk_desc_free(struct mtk_device *mtk, struct mtk_desc_ring *cdr,
+			  struct mtk_desc_ring *rdr)
 {
 	writel(0, mtk->base + EIP93_REG_PE_RING_CONFIG);
 	writel(0, mtk->base + EIP93_REG_PE_CDR_BASE);
 	writel(0, mtk->base + EIP93_REG_PE_RDR_BASE);
 }
 
-static int mtk_desc_init(struct mtk_device *mtk,
-			struct mtk_desc_ring *cdr,
-			struct mtk_desc_ring *rdr)
+static int mtk_desc_init(struct mtk_device *mtk, struct mtk_desc_ring *cdr,
+			 struct mtk_desc_ring *rdr)
 {
 	int RingOffset, RingSize;
 
@@ -410,7 +409,7 @@ static int mtk_desc_init(struct mtk_device *mtk,
 
 	cdr->write = cdr->base;
 	cdr->base_end = cdr->base + cdr->offset * (MTK_RING_SIZE - 1);
-	cdr->read  = cdr->base;
+	cdr->read = cdr->base;
 
 	dev_dbg(mtk->dev, "CD Ring : %08X\n", cdr->base_dma);
 
@@ -422,7 +421,7 @@ static int mtk_desc_init(struct mtk_device *mtk,
 
 	rdr->write = rdr->base;
 	rdr->base_end = rdr->base + rdr->offset * (MTK_RING_SIZE - 1);
-	rdr->read  = rdr->base;
+	rdr->read = rdr->base;
 
 	dev_dbg(mtk->dev, "RD Ring : %08X\n", rdr->base_dma);
 
@@ -433,21 +432,21 @@ static int mtk_desc_init(struct mtk_device *mtk,
 	RingSize = MTK_RING_SIZE - 1;
 
 	writel(((RingOffset & GENMASK(8, 0)) << 16) |
-		(RingSize & GENMASK(10, 0)),
-		mtk->base + EIP93_REG_PE_RING_CONFIG);
+		       (RingSize & GENMASK(10, 0)),
+	       mtk->base + EIP93_REG_PE_RING_CONFIG);
 
 	/* Create Sa and State record DMA pool */
 
-	mtk->saRecord_pool = dmam_pool_create("eip93-saRecord",
-				mtk->dev, sizeof(struct saRecord_s), 32, 0);
+	mtk->saRecord_pool = dmam_pool_create("eip93-saRecord", mtk->dev,
+					      sizeof(struct saRecord_s), 32, 0);
 
 	if (!mtk->saRecord_pool) {
 		dev_err(mtk->dev, "Unable to allocate saRecord DMA pool\n");
 		return -ENOMEM;
 	}
 
-	mtk->saState_pool = dmam_pool_create("eip93-saState",
-				mtk->dev, sizeof(struct saState_s), 32, 0);
+	mtk->saState_pool = dmam_pool_create("eip93-saState", mtk->dev,
+					     sizeof(struct saState_s), 32, 0);
 
 	if (!mtk->saState_pool) {
 		dev_err(mtk->dev, "Unable to allocate saState DMA pool\n");
@@ -486,7 +485,7 @@ static int mtk_crypto_probe(struct platform_device *pdev)
 	dev_dbg(mtk->dev, "Assigning IRQ: %d", mtk->irq);
 
 	ret = devm_request_irq(mtk->dev, mtk->irq, mtk_irq_handler,
-				IRQF_TRIGGER_HIGH, dev_name(mtk->dev), mtk);
+			       IRQF_TRIGGER_HIGH, dev_name(mtk->dev), mtk);
 
 	mtk->ring = devm_kcalloc(mtk->dev, 1, sizeof(*mtk->ring), GFP_KERNEL);
 
@@ -552,7 +551,9 @@ static int mtk_crypto_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id mtk_crypto_of_match[] = {
-	{ .compatible = "mediatek,mtk-eip93", },
+	{
+		.compatible = "mediatek,mtk-eip93",
+	},
 	{}
 };
 MODULE_DEVICE_TABLE(of, mtk_crypto_of_match);

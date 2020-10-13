@@ -5,11 +5,11 @@
  * Richard van Schagen <vschagen@cs.com>
  */
 
+#include "eip93-prng.h"
 #include "eip93-common.h"
 #include "eip93-core.h"
 #include "eip93-regs.h"
 #include "eip93-ring.h"
-#include "eip93-prng.h"
 
 static int mtk_prng_push_job(struct mtk_device *mtk, bool reset)
 {
@@ -80,29 +80,27 @@ bool mtk_prng_init(struct mtk_device *mtk, bool fLongSA)
 	struct mtk_prng_device *prng = mtk->prng;
 	int i;
 	struct saRecord_s *saRecord;
-	const uint32_t PRNGKey[]  = {0xe0fc631d, 0xcbb9fb9a,
-					0x869285cb, 0xcbb9fb9a};
-	const uint32_t PRNGSeed[]  = {0x758bac03, 0xf20ab39e,
-					0xa569f104, 0x95dfaea6};
-	const uint32_t PRNGDateTime[] = {0, 0, 0, 0};
+	const uint32_t PRNGKey[] = { 0xe0fc631d, 0xcbb9fb9a, 0x869285cb,
+				     0xcbb9fb9a };
+	const uint32_t PRNGSeed[] = { 0x758bac03, 0xf20ab39e, 0xa569f104,
+				      0x95dfaea6 };
+	const uint32_t PRNGDateTime[] = { 0, 0, 0, 0 };
 
 	if (!mtk)
 		return -ENODEV;
 
 	prng->cur_buf = 0;
 	prng->PRNGBuffer[0] = devm_kzalloc(mtk->dev, 4080, GFP_KERNEL);
-	prng->PRNGBuffer_dma[0] = (u32)dma_map_single(mtk->dev,
-				(void *)prng->PRNGBuffer[0],
-				4080, DMA_FROM_DEVICE);
+	prng->PRNGBuffer_dma[0] = (u32)dma_map_single(
+		mtk->dev, (void *)prng->PRNGBuffer[0], 4080, DMA_FROM_DEVICE);
 
 	prng->PRNGBuffer[1] = devm_kzalloc(mtk->dev, 4080, GFP_KERNEL);
-	prng->PRNGBuffer_dma[1] = (u32)dma_map_single(mtk->dev,
-				(void *)prng->PRNGBuffer[1],
-				4080, DMA_FROM_DEVICE);
+	prng->PRNGBuffer_dma[1] = (u32)dma_map_single(
+		mtk->dev, (void *)prng->PRNGBuffer[1], 4080, DMA_FROM_DEVICE);
 
-	prng->PRNGSaRecord = dmam_alloc_coherent(mtk->dev,
-				sizeof(struct saRecord_s),
-				&prng->PRNGSaRecord_dma, GFP_KERNEL);
+	prng->PRNGSaRecord =
+		dmam_alloc_coherent(mtk->dev, sizeof(struct saRecord_s),
+				    &prng->PRNGSaRecord_dma, GFP_KERNEL);
 
 	if (!prng->PRNGSaRecord) {
 		dev_err(mtk->dev, "PRNG dma_alloc for saRecord failed\n");
@@ -134,14 +132,14 @@ void mtk_prng_done(struct mtk_device *mtk, u32 err)
 	}
 
 	/* Buffer refilled, invalidate cache */
-	dma_unmap_single(mtk->dev, prng->PRNGBuffer_dma[cur],
-							4080, DMA_FROM_DEVICE);
+	dma_unmap_single(mtk->dev, prng->PRNGBuffer_dma[cur], 4080,
+			 DMA_FROM_DEVICE);
 
 	complete(&prng->Filled);
 }
 
 static int get_prng_bytes(char *buf, size_t nbytes, struct mtk_prng_ctx *ctx,
-				int do_cont_test)
+			  int do_cont_test)
 {
 	int err;
 
@@ -157,7 +155,7 @@ done:
 }
 
 static int mtk_prng_generate(struct crypto_rng *tfm, const u8 *src,
-			   unsigned int slen, u8 *dst, unsigned int dlen)
+			     unsigned int slen, u8 *dst, unsigned int dlen)
 {
 	struct mtk_prng_ctx *prng = crypto_rng_ctx(tfm);
 
@@ -165,11 +163,11 @@ static int mtk_prng_generate(struct crypto_rng *tfm, const u8 *src,
 }
 
 static int mtk_prng_seed(struct crypto_rng *tfm, const u8 *seed,
-		       unsigned int slen)
+			 unsigned int slen)
 {
 	struct rng_alg *alg = crypto_rng_alg(tfm);
-	struct mtk_alg_template *tmpl = container_of(alg,
-				struct mtk_alg_template, alg.rng);
+	struct mtk_alg_template *tmpl =
+		container_of(alg, struct mtk_alg_template, alg.rng);
 	struct mtk_device *mtk = tmpl->mtk;
 
 	return 0;
@@ -185,9 +183,8 @@ static bool mtk_prng_fill_buffer(struct mtk_device *mtk)
 		return -ENODEV;
 
 	/* add logic for 2 buffers and swap */
-	prng->PRNGBuffer_dma[cur] = (u32)dma_map_single(mtk->dev,
-					(void *)prng->PRNGBuffer[cur],
-					4080, DMA_FROM_DEVICE);
+	prng->PRNGBuffer_dma[cur] = (u32)dma_map_single(
+		mtk->dev, (void *)prng->PRNGBuffer[cur], 4080, DMA_FROM_DEVICE);
 
 	ret = mtk_prng_push_job(mtk, false);
 
@@ -195,9 +192,8 @@ static bool mtk_prng_fill_buffer(struct mtk_device *mtk)
 }
 
 static int reset_prng_context(struct mtk_prng_ctx *ctx,
-				const unsigned char *key,
-				const unsigned char *V,
-				const unsigned char *DT)
+			      const unsigned char *key, const unsigned char *V,
+			      const unsigned char *DT)
 {
 	spin_lock_bh(&ctx->prng_lock);
 	ctx->flags |= PRNG_NEED_RESET;
@@ -206,7 +202,6 @@ static int reset_prng_context(struct mtk_prng_ctx *ctx,
 		memcpy(ctx->PRNGKey, key, DEFAULT_PRNG_KSZ);
 	else
 		memcpy(ctx->PRNGKey, DEFAULT_PRNG_KEY, DEFAULT_PRNG_KSZ);
-
 
 	if (V)
 		memcpy(ctx->PRNGSeed, V, DEFAULT_BLK_SZ);
@@ -234,8 +229,8 @@ static int reset_prng_context(struct mtk_prng_ctx *ctx,
  *  V and KEY are required during reset, and DT is optional, detected
  *  as being present by testing the length of the seed
  */
-static int cprng_reset(struct crypto_rng *tfm,
-		       const u8 *seed, unsigned int slen)
+static int cprng_reset(struct crypto_rng *tfm, const u8 *seed,
+		       unsigned int slen)
 {
 	struct mtk_prng_ctx *prng = crypto_rng_ctx(tfm);
 	const u8 *key = seed + DEFAULT_BLK_SZ;
@@ -253,7 +248,6 @@ static int cprng_reset(struct crypto_rng *tfm,
 		return -EINVAL;
 	return 0;
 }
-
 
 static void free_prng_context(struct mtk_prng_ctx *ctx)
 {
@@ -303,17 +297,17 @@ struct mtk_alg_template mtk_alg_prng = {
 };
 
 //#ifdef CONFIG_CRYPTO_FIPS
-static int fips_cprng_get_random(struct crypto_rng *tfm,
-				 const u8 *src, unsigned int slen,
-				 u8 *rdata, unsigned int dlen)
+static int fips_cprng_get_random(struct crypto_rng *tfm, const u8 *src,
+				 unsigned int slen, u8 *rdata,
+				 unsigned int dlen)
 {
 	struct mtk_prng_ctx *prng = crypto_rng_ctx(tfm);
 
 	return get_prng_bytes(rdata, dlen, prng, 1);
 }
 
-static int fips_cprng_reset(struct crypto_rng *tfm,
-			    const u8 *seed, unsigned int slen)
+static int fips_cprng_reset(struct crypto_rng *tfm, const u8 *seed,
+			    unsigned int slen)
 {
 	struct mtk_prng_ctx *prng = crypto_rng_ctx(tfm);
 	u8 rdata[DEFAULT_BLK_SZ];
