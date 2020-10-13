@@ -411,7 +411,7 @@ static int mtk_desc_init(struct mtk_device *mtk, struct mtk_desc_ring *cdr,
 	cdr->base_end = cdr->base + cdr->offset * (MTK_RING_SIZE - 1);
 	cdr->read = cdr->base;
 
-	dev_dbg(mtk->dev, "CD Ring : %08X\n", cdr->base_dma);
+	dev_dbg(mtk->dev, "CD Ring : %pad\n", cdr->base_dma);
 
 	rdr->offset = sizeof(struct eip93_descriptor_s);
 	rdr->base = dmam_alloc_coherent(mtk->dev, rdr->offset * MTK_RING_SIZE,
@@ -423,7 +423,7 @@ static int mtk_desc_init(struct mtk_device *mtk, struct mtk_desc_ring *cdr,
 	rdr->base_end = rdr->base + rdr->offset * (MTK_RING_SIZE - 1);
 	rdr->read = rdr->base;
 
-	dev_dbg(mtk->dev, "RD Ring : %08X\n", rdr->base_dma);
+	dev_dbg(mtk->dev, "RD Ring : %pad\n", rdr->base_dma);
 
 	writel((u32)cdr->base_dma, mtk->base + EIP93_REG_PE_CDR_BASE);
 	writel((u32)rdr->base_dma, mtk->base + EIP93_REG_PE_RDR_BASE);
