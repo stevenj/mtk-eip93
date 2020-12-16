@@ -22,17 +22,19 @@
 #include <crypto/null.h>
 #include <crypto/scatterwalk.h>
 #include <crypto/sha.h>
+
 #include <linux/dma-mapping.h>
 #include <linux/dmapool.h>
 #include <linux/moduleparam.h>
 #include <linux/scatterlist.h>
 #include <linux/types.h>
 
-#include "eip93-cipher.h"
 #include "eip93-common.h"
 #include "eip93-core.h"
 #include "eip93-regs.h"
 #include "eip93-ring.h"
+
+#include "eip93-cipher.h"
 
 static unsigned int aes_sw = NUM_AES_BYPASS;
 module_param(aes_sw, uint, 0644);

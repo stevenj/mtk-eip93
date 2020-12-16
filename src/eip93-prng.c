@@ -5,11 +5,12 @@
  * Richard van Schagen <vschagen@cs.com>
  */
 
-#include "eip93-prng.h"
 #include "eip93-common.h"
 #include "eip93-core.h"
 #include "eip93-regs.h"
 #include "eip93-ring.h"
+
+#include "eip93-prng.h"
 
 static int mtk_prng_push_job(struct mtk_device *mtk, bool reset)
 {
@@ -142,7 +143,7 @@ static int get_prng_bytes(char *buf, size_t nbytes, struct mtk_prng_ctx *ctx,
 {
 	int err;
 
-	spin_lock_bh(&ctx->prng_lock);
+	spin_lock_bh(&ctx->prng_lock); // TODO: Work out why this won't compile
 
 	err = -EINVAL;
 	if (ctx->flags & PRNG_NEED_RESET)

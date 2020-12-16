@@ -16,15 +16,18 @@
 #include <linux/types.h>
 
 #include <crypto/internal/aead.h>
-#include <crypto/internal/hash.h>
 #include <crypto/internal/skcipher.h>
 
-#include "eip93-cipher.h"
+#include <crypto/internal/hash.h>
+
+#include "eip93-regs.h"
+
 #include "eip93-common.h"
 #include "eip93-core.h"
-#include "eip93-prng.h"
-#include "eip93-regs.h"
 #include "eip93-ring.h"
+
+#include "eip93-cipher.h"
+#include "eip93-prng.h"
 
 static struct mtk_alg_template *mtk_algs[] = {
 	&mtk_alg_ecb_des,

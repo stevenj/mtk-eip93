@@ -7,13 +7,14 @@
 #ifndef _CORE_H_
 #define _CORE_H_
 
+#include <linux/atomic.h>
+#include <linux/completion.h>
+#include <linux/dmapool.h>
+
 #include <crypto/aead.h>
 #include <crypto/internal/hash.h>
 #include <crypto/internal/rng.h>
 #include <crypto/internal/skcipher.h>
-#include <linux/atomic.h>
-#include <linux/completion.h>
-#include <linux/dmapool.h>
 
 /**
  * struct mtk_device - crypto engine device structure
